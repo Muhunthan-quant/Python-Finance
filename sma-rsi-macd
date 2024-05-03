@@ -1,0 +1,26 @@
+import btalib
+import pandas as pd
+
+# Load DataFrame
+btc_df = pd.read_csv('btc_bars3.csv', index_col=0)
+btc_df.set_index('date', inplace=True)
+btc_df.index = pd.to_datetime(btc_df.index, unit='ms')
+
+# Calculate 20-day Moving Average using Pandas
+btc_df['20sma'] = btc_df.close.rolling(20).mean()
+
+# Calculate Last Value of 20-day Moving Average
+mean = btc_df.close.tail(20).mean()
+
+# Calculate Highest Closing Price in 2020
+max_val = btc_df.close['2020'].max()
+
+# Calculate Technical Indicators using bta-lib
+sma = btalib.sma(btc_df.close)
+rsi = btalib.rsi(btc_df, period=14)
+macd = btalib.macd(btc_df, pfast=20, pslow=50, psignal=13)
+
+# Join Calculated Indicators to Original DataFrame
+btc_df = btc_df.join([rsi.df, macd.df])
+
+print(btc_df.tail())
