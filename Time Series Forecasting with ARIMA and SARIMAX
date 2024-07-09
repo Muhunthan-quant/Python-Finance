@@ -1,0 +1,108 @@
+import pandas as pd
+import matplotlib.pyplot as plt
+from statsmodels.tsa.stattools import adfuller
+from statsmodels.graphics.tsaplots import plot_acf, plot_pacf
+from statsmodels.tsa.arima.model import ARIMA
+from statsmodels.tsa.statespace.sarimax import SARIMAX
+from sklearn.metrics import mean_squared_error, mean_absolute_error
+
+# Load data from CSV
+sales_data = pd.read_csv('sales_data.csv', parse_dates=['Date'], index_col='Date')
+
+# Plot the sales data
+plt.figure(figsize=(10, 4))
+plt.plot(sales_data)
+plt.title('Monthly Sales Data')
+plt.xlabel('Date')
+plt.ylabel('Sales')
+plt.show()
+
+# Check for stationarity using ADF test
+result = adfuller(sales_data['Sales'])
+print(f'ADF Statistic: {result[0]}')
+print(f'p-value: {result[1]}')
+
+# If not stationary, apply differencing
+if result[1] > 0.05:
+    sales_data_diff = sales_data['Sales'].diff().dropna()
+    result_diff = adfuller(sales_data_diff)
+    print(f'ADF Statistic (Differenced): {result_diff[0]}')
+    print(f'p-value (Differenced): {result_diff[1]}')
+
+    # Plot differenced series
+    plt.figure(figsize=(10, 4))
+    plt.plot(sales_data_diff)
+    plt.title('Differenced Monthly Sales Data')
+    plt.xlabel('Date')
+    plt.ylabel('Differenced Sales')
+    plt.show()
+else:
+    sales_data_diff = sales_data['Sales']
+
+# Determine AR and MA terms using ACF and PACF plots
+plt.figure(figsize=(10, 4))
+plot_acf(sales_data_diff)
+plot_pacf(sales_data_diff)
+plt.show()
+
+# Fit ARIMA model (p, d, q) - for illustration, let's assume (1, 1, 1)
+arima_model = ARIMA(sales_data, order=(1, 1, 1))
+arima_model_fit = arima_model.fit()
+print(arima_model_fit.summary())
+
+# Fit SARIMAX model with exogenous variables (for illustration, assume no exogenous variables)
+sarimax_model = SARIMAX(sales_data, order=(1, 1, 1), seasonal_order=(1, 1, 1, 12), exog=None)
+sarimax_model_fit = sarimax_model.fit()
+print(sarimax_model_fit.summary())
+
+# Forecast future values
+forecast_arima = arima_model_fit.forecast(steps=12)
+forecast_sarimax = sarimax_model_fit.forecast(steps=12)
+
+# Calculate RMSE and MAE for each model
+def evaluate_forecast(true, forecast):
+    rmse = mean_squared_error(true, forecast, squared=False)
+    mae = mean_absolute_error(true, forecast)
+    return rmse, mae
+
+rmse_arima, mae_arima = evaluate_forecast(sales_data[-12:], forecast_arima)
+rmse_sarimax, mae_sarimax = evaluate_forecast(sales_data[-12:], forecast_sarimax)
+
+# Print evaluation metrics
+print(f'ARIMA Model - RMSE: {rmse_arima}, MAE: {mae_arima}')
+print(f'SARIMAX Model - RMSE: {rmse_sarimax}, MAE: {mae_sarimax}')
+
+# Plot forecasted values
+plt.figure(figsize=(10, 6))
+plt.plot(sales_data.index[-24:], sales_data.values[-24:], label='Historical Sales')
+plt.plot(sales_data.index[-12:], forecast_arima, label='ARIMA Forecast', linestyle='--')
+plt.plot(sales_data.index[-12:], forecast_sarimax, label='SARIMAX Forecast', linestyle='--')
+plt.title('Sales Forecast Comparison')
+plt.xlabel('Date')
+plt.ylabel('Sales')
+plt.legend()
+plt.show()
+
+# Selecting the best model based on AIC and BIC
+aic_bic_values = {
+    'ARIMA': (arima_model_fit.aic, arima_model_fit.bic),
+    'SARIMAX': (sarimax_model_fit.aic, sarimax_model_fit.bic)
+}
+
+best_model = min(aic_bic_values, key=lambda k: (aic_bic_values[k][0], aic_bic_values[k][1]))
+print(f'Best Model based on AIC and BIC: {best_model}')
+
+# Show forecast of the best model
+if best_model == 'ARIMA':
+    best_forecast = forecast_arima
+elif best_model == 'SARIMAX':
+    best_forecast = forecast_sarimax
+
+plt.figure(figsize=(10, 6))
+plt.plot(sales_data.index[-24:], sales_data.values[-24:], label='Historical Sales')
+plt.plot(sales_data.index[-12:], best_forecast, label=f'{best_model} Forecast', linestyle='--')
+plt.title(f'Best Model Forecast: {best_model}')
+plt.xlabel('Date')
+plt.ylabel('Sales')
+plt.legend()
+plt.show()
